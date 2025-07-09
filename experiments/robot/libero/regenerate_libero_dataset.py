@@ -20,6 +20,12 @@ Usage:
             --libero_task_suite libero_spatial \
             --libero_raw_data_dir ./LIBERO/libero/datasets/libero_spatial \
             --libero_target_dir ./LIBERO/libero/datasets/libero_spatial_no_noops
+    
+    Example (LIBERO-90):
+        python experiments/robot/libero/regenerate_libero_dataset.py \
+            --libero_task_suite libero_90 \
+            --libero_raw_data_dir /coc/testnvme/chuang475/projects/openvla-mini/data/modified_libero_rlds/libero_90_raw \
+            --libero_target_dir /coc/testnvme/chuang475/projects/openvla-mini/data/modified_libero_rlds/libero_90_no_noops
 
 """
 
@@ -32,6 +38,9 @@ import numpy as np
 import robosuite.utils.transform_utils as T
 import tqdm
 from libero.libero import benchmark
+
+import sys
+sys.path.append("/coc/testnvme/chuang475/projects/openvla-mini")
 
 from experiments.robot.libero.libero_utils import (
     get_libero_dummy_action,

@@ -25,8 +25,9 @@ overwatch = initialize_overwatch(__name__)
 
 
 # === HF Hub Repository ===
-HF_HUB_REPO = "TRI-ML/prismatic-vlms"
-VLA_HF_HUB_REPO = "openvla/openvla-dev"
+HF_HUB_REPO = "Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b"
+VLA_HF_HUB_REPO = "Stanford-ILIAD/minivla-libero90-prismatic"
+# https://huggingface.co/Stanford-ILIAD/prism-qwen25-extra-dinosiglip-224px-0_5b/blob/main/config.json
 
 
 # === Available Models ===
@@ -70,9 +71,9 @@ def load(
 
         overwatch.info(f"Downloading `{(model_id := GLOBAL_REGISTRY[model_id_or_path]['model_id'])} from HF Hub")
         with overwatch.local_zero_first():
-            config_json = hf_hub_download(repo_id=HF_HUB_REPO, filename=f"{model_id}/config.json", cache_dir=cache_dir)
+            config_json = hf_hub_download(repo_id=HF_HUB_REPO, filename="config.json")
             checkpoint_pt = hf_hub_download(
-                repo_id=HF_HUB_REPO, filename=f"{model_id}/checkpoints/latest-checkpoint.pt", cache_dir=cache_dir
+                repo_id=HF_HUB_REPO, filename=f"checkpoints/step-020792-epoch-01-loss=0.5268.pt"
             )
 
     # Load Model Config from `config.json`

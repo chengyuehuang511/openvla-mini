@@ -14,6 +14,9 @@ import jsonlines
 import numpy as np
 import torch
 import wandb
+with open(".wandb_api_key", "r") as f:
+    api_key = f.read().strip()
+wandb.login(key=api_key)
 
 from prismatic.overwatch import initialize_overwatch
 

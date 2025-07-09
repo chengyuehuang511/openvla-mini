@@ -27,6 +27,9 @@ import torch
 import torch.distributed as dist
 import yaml
 
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+
 from prismatic.conf import VLAConfig, VLARegistry
 from prismatic.models import load, load_vla
 from prismatic.overwatch import initialize_overwatch
@@ -120,7 +123,7 @@ def train(cfg: TrainConfig) -> None:
     # Configure Unique Run Name & Save Directory
     vla_id = cfg.vla.vla_id
     cfg.run_id = (
-        f"{vla_id}+n{cfg.vla.expected_world_size // 8}+b{cfg.per_device_batch_size}+x{cfg.seed}"
+        f"{vla_id}+n{cfg.vla.expected_world_size // 8}+b{cfg.per_device_batch_size}+lr{cfg.learning_rate}+e{cfg.epochs}+x{cfg.seed}"
         if cfg.run_id is None
         else cfg.run_id
     )
@@ -162,7 +165,7 @@ def train(cfg: TrainConfig) -> None:
 
     else:
         vlm = load(
-            cfg.vla.base_vlm, hf_token=hf_token, load_for_training=True, image_sequence_len=cfg.image_sequence_len
+            cfg.vla.base_vlm, hf_token=hf_token, load_for_training=True, image_sequence_len=cfg.image_sequence_len, cache_dir=cfg.run_root_dir
         )
 
     # [Validate] Model should be in Full Precision!
