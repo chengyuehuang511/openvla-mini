@@ -44,12 +44,19 @@ def get_prismatic_vla(cfg):
         hf_token=hf_token,
         load_for_training=False,
     )
+    # Check if the model is in full precision.
+    if_full_precision = True
     for param in vla.parameters():
-        assert param.dtype == torch.float32, f"Loaded VLM parameter not in full precision: {param}"
-    # Cast to half precision.
-    vla.vision_backbone.to(dtype=vla.vision_backbone.half_precision_dtype)
-    vla.llm_backbone.to(dtype=vla.llm_backbone.half_precision_dtype)
-    vla.to(dtype=vla.llm_backbone.half_precision_dtype)
+        if param.dtype != torch.float32:
+            print(f"Loaded VLM parameter not in full precision: {param}")
+            if_full_precision = False
+            break
+    if if_full_precision:
+        print("VLM loaded in full precision. Casting to half precision.")
+        # Cast to half precision.
+        vla.vision_backbone.to(dtype=vla.vision_backbone.half_precision_dtype)
+        vla.llm_backbone.to(dtype=vla.llm_backbone.half_precision_dtype)
+        vla.to(dtype=vla.llm_backbone.half_precision_dtype)
     vla.to(DEVICE)
     return vla
 
@@ -84,8 +91,13 @@ def get_vla(cfg):
 
     # Load dataset stats used during finetuning (for action un-normalization).
     dataset_statistics_path = os.path.join(cfg.pretrained_checkpoint, "dataset_statistics.json")
+    dataset_statistics_path_alt = os.path.join("/coc/testnvme/chuang475/projects/openvla-mini/log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90+n1+b24+lr2e-05+e10+x7", "dataset_statistics.json")
     if os.path.isfile(dataset_statistics_path):
         with open(dataset_statistics_path, "r") as f:
+            norm_stats = json.load(f)
+        vla.norm_stats = norm_stats
+    elif os.path.isfile(dataset_statistics_path_alt):
+        with open(dataset_statistics_path_alt, "r") as f:
             norm_stats = json.load(f)
         vla.norm_stats = norm_stats
     else:

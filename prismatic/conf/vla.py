@@ -155,7 +155,20 @@ class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90(Exp_Qwen25_DinoSigLIP_224px_0_5
     global_batch_size: int = 24 * 8  # 192
     per_device_batch_size: int = 24
     epochs: int = 10
-    learning_rate: float = 1e-5
+    learning_rate: float = 2e-5
+
+
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops"
+
+    data_mix: str = "libero_90_no_noops"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 24 * 8  # 192
+    per_device_batch_size: int = 24
+    epochs: int = 10
+    learning_rate: float = 2e-5
 
 
 @dataclass
@@ -309,6 +322,7 @@ class VLARegistry(Enum):
     QWEN25_DINOSIGLIP_224PX_0_5B_MX_OXE_MAGIC_SOUP = Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup
     QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90 = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90
     QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_10_NO_NOOPS = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS
+    QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90_NO_NOOPS = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS
     QWEN25_DINOSIGLIP_224PX_T2_0_5B_LIBERO_90 = Exp_Qwen25_DinoSigLIP_224px_T2_0_5B_LIBERO_90
     QWEN25_DINOSIGLIP_224PX_WRIST_0_5B_LIBERO_90 = Exp_Qwen25_DinoSigLIP_224px_wrist_0_5B_LIBERO_90
 
