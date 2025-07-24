@@ -8,7 +8,7 @@ import copy
 import inspect
 import json
 from functools import partial
-from typing import Callable, Dict, List, Optional, Tuple, Union
+from typing import Callable, Dict, List, Optional, Tuple, Union, Any
 
 import dlimp as dl
 import numpy as np
@@ -184,6 +184,7 @@ def make_dataset_from_rlds(
             "task": task,
             "action": tf.cast(traj["action"], tf.float32),
             "dataset_name": tf.repeat(name, traj_len),
+            "type": tf.repeat("action", traj_len)
         }
 
         if absolute_action_mask is not None:
@@ -249,6 +250,161 @@ def make_dataset_from_rlds(
     )
 
     return dataset, dataset_statistics
+
+
+# ruff: noqa: B006
+def make_dataset_from_vqa(
+    name: str,
+    data_dir: str,
+    *,
+    train: bool,
+    shuffle: bool = True,
+    image_obs_keys: Dict[str, Optional[str]] = {},
+    depth_obs_keys: Dict[str, Optional[str]] = {},
+    state_obs_keys: List[Optional[str]] = (),
+    ques_key: str = "question_text",
+    ans_key: str = "top_answer",
+    all_ans_key: str = "answers",
+    action_proprio_normalization_type: NormalizationType = NormalizationType.NORMAL,
+    dataset_statistics: Optional[Union[dict, str]] = None,
+    absolute_action_mask: Optional[List[bool]] = None,
+    action_normalization_mask: Optional[List[bool]] = None,
+    num_parallel_reads: int = tf.data.AUTOTUNE,
+    num_parallel_calls: int = tf.data.AUTOTUNE,
+    **kwargs: dict,
+) -> Tuple[dl.DLataset, dict]:
+    
+    builder = tfds.builder(name, data_dir=data_dir)
+
+    # construct the dataset
+    if "validation" not in builder.info.splits:
+        split = "train[:95%]" if train else "train[95%:]"
+    else:
+        split = "train" if train else "validation"
+
+    # dataset = dl.DLataset.from_tfrecords(builder, split=split, shuffle=shuffle, num_parallel_reads=num_parallel_reads)
+    from dlimp.dataset import _wrap
+    dataset = _wrap(builder.as_dataset, False)(
+        split=split,
+        shuffle_files=shuffle,
+        read_config=tfds.ReadConfig(
+            skip_prefetch=True,
+            num_parallel_calls_for_interleave_files=num_parallel_reads,
+            interleave_cycle_length=num_parallel_reads,
+        ),
+    )._apply_options()
+
+    def _broadcast_metadata_vqa(i: tf.Tensor, traj: Dict[str, Any]) -> Dict[str, Any]:
+        traj_len = 1 #tf.shape(tf.convert_to_tensor(absolute_action_mask, dtype=tf.bool))[0]
+
+        # broadcast metadata to the length of the trajectory
+        metadata = tf.nest.map_structure(lambda x: tf.repeat(x, traj_len), traj)
+
+        # put steps back in
+        traj = {**traj, "traj_metadata": metadata}
+
+        assert "_len" not in traj
+        assert "_traj_index" not in traj
+        assert "_frame_index" not in traj
+        traj["_len"] = tf.repeat(traj_len, traj_len)
+        traj["_traj_index"] = tf.repeat(i, traj_len)
+        traj["_frame_index"] = tf.range(traj_len)
+
+        return traj
+
+    dataset = dataset.enumerate().traj_map(_broadcast_metadata_vqa)
+    
+    def restructure(traj):
+        # extracts images, depth images and proprio from the "observation" dict
+        traj_len = 1 #tf.shape(tf.convert_to_tensor(absolute_action_mask, dtype=tf.bool))[0]
+        old_obs = traj
+        new_obs = {}
+        for new, old in image_obs_keys.items():
+            if old is None:
+                new_obs[f"image_{new}"] = tf.repeat("", traj_len)  # padding
+            else:
+                new_obs[f"image_{new}"] = tf.expand_dims(tf.io.encode_jpeg(old_obs[old]), axis=0)
+
+        for new, old in depth_obs_keys.items():
+            if old is None:
+                new_obs[f"depth_{new}"] = tf.repeat("", traj_len)  # padding
+            else:
+                new_obs[f"depth_{new}"] = tf.expand_dims(old_obs[old], axis=0)
+
+        # if state_obs_keys:
+        #     new_obs["proprio"] = tf.concat(
+        #         [
+        #             (
+        #                 tf.zeros((traj_len, 1), dtype=tf.float32)  # padding
+        #                 if key is None
+        #                 else tf.cast(old_obs[key], tf.float32)
+        #             )
+        #             for key in state_obs_keys
+        #         ],
+        #         axis=1,
+        #     )
+
+        # add timestep info
+        new_obs["timestep"] = tf.range(traj_len)
+
+        # extracts `language_key` into the "task" dict
+        task = {}
+        
+        if traj[ques_key].dtype != tf.string:
+            raise ValueError(
+                f"Language key {ques_key} has dtype {traj[ques_key].dtype}, " "but it must be tf.string."
+            )
+        task["language_instruction"] = tf.expand_dims(traj.pop(ques_key) + "<ans>" + traj.pop(ans_key), axis=0)
+
+        traj = {
+            "observation": new_obs,
+            "task": task,
+            "action": tf.cast(tf.zeros((traj_len, len(absolute_action_mask))), tf.float32),
+            "dataset_name": tf.repeat(name, traj_len),
+            "type": tf.repeat("vqa", traj_len)
+        }
+
+        if absolute_action_mask is not None:
+            if len(absolute_action_mask) != traj["action"].shape[-1]:
+                raise ValueError(
+                    f"Length of absolute_action_mask ({len(absolute_action_mask)}) "
+                    f"does not match action dimension ({traj['action'].shape[-1]})."
+                )
+            traj["absolute_action_mask"] = tf.tile(
+                tf.convert_to_tensor(absolute_action_mask, dtype=tf.bool)[None],
+                [traj_len, 1],
+            )
+
+        return traj
+
+    if dataset_statistics is None:
+        dataset_statistics = {}
+        dataset_statistics["num_transitions"] = len(dataset)
+    
+    dataset = dataset.traj_map(restructure, num_parallel_calls)
+
+    def normalize_action_and_proprio_vqa(traj: Dict, metadata: Dict, normalization_type: NormalizationType):
+        """Fake normalization: zero out action and proprio for compatibility."""
+        if "action" in traj:
+            traj["action"] = tf.zeros_like(traj["action"])
+        if "observation" in traj and "proprio" in traj["observation"]:
+            traj["observation"]["proprio"] = tf.zeros_like(traj["observation"]["proprio"])
+        return traj
+
+    dataset = dataset.traj_map(
+        partial(
+            normalize_action_and_proprio_vqa,
+            metadata=dataset_statistics,
+            normalization_type=action_proprio_normalization_type,
+        ),
+        num_parallel_calls,
+    )
+
+    return dataset, dataset_statistics
+
+# def _add_instance_ids(self, key="instance_id"):
+#     for idx, ann in enumerate(self.annotation):
+#         ann[key] = str(idx)
 
 
 def apply_trajectory_transforms(
@@ -466,6 +622,7 @@ def make_interleaved_dataset(
     balance_weights: bool = False,
     traj_transform_threads: Optional[int] = None,
     traj_read_threads: Optional[int] = None,
+    dataset_types: Optional[List[str]] = None,
 ) -> dl.DLataset:
     """
     Creates an interleaved dataset from list of dataset configs (kwargs). Returns a dataset of batched frames.
@@ -503,11 +660,14 @@ def make_interleaved_dataset(
 
     # Get Dataset Sizes
     dataset_sizes, all_dataset_statistics = [], {}
-    for dataset_kwargs in dataset_kwargs_list:
+    for dataset_kwargs, d_type in zip(dataset_kwargs_list, dataset_types):
         data_kwargs = copy.deepcopy(dataset_kwargs)
         if "dataset_frame_transform_kwargs" in data_kwargs:
             data_kwargs.pop("dataset_frame_transform_kwargs")
-        _, dataset_statistics = make_dataset_from_rlds(**data_kwargs, train=train)
+        if d_type == "vqa":
+            _, dataset_statistics = make_dataset_from_vqa(**data_kwargs, train=train)
+        else:
+            _, dataset_statistics = make_dataset_from_rlds(**data_kwargs, train=train)
         dataset_sizes.append(dataset_statistics["num_transitions"])
         all_dataset_statistics[dataset_kwargs["name"]] = dataset_statistics
 
@@ -534,23 +694,33 @@ def make_interleaved_dataset(
     # Construct Datasets
     overwatch.info("Constructing datasets...")
     datasets = []
-    for dataset_kwargs, threads, reads in zip(
+    for dataset_kwargs, threads, reads, d_type in zip(
         dataset_kwargs_list,
         threads_per_dataset,
         reads_per_dataset,
+        dataset_types,
     ):
         dataset_frame_transform_kwargs = (
             dataset_kwargs.pop("dataset_frame_transform_kwargs")
             if "dataset_frame_transform_kwargs" in dataset_kwargs
             else {}
         )
-        dataset, _ = make_dataset_from_rlds(
-            **dataset_kwargs,
-            train=train,
-            num_parallel_calls=threads,
-            num_parallel_reads=reads,
-            dataset_statistics=all_dataset_statistics[dataset_kwargs["name"]],
-        )
+        if d_type == "vqa":
+            dataset, _ = make_dataset_from_vqa(
+                **dataset_kwargs,
+                train=train,
+                num_parallel_calls=threads,
+                num_parallel_reads=reads,
+                dataset_statistics=all_dataset_statistics[dataset_kwargs["name"]],
+            )
+        else:
+            dataset, _ = make_dataset_from_rlds(
+                **dataset_kwargs,
+                train=train,
+                num_parallel_calls=threads,
+                num_parallel_reads=reads,
+                dataset_statistics=all_dataset_statistics[dataset_kwargs["name"]],
+            )
         dataset = apply_trajectory_transforms(
             dataset.repeat(),
             **traj_transform_kwargs,

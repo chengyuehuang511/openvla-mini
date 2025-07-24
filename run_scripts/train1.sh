@@ -4,7 +4,7 @@
 #SBATCH --nodes=1
 #SBATCH --cpus-per-gpu=16
 #SBATCH --gpus-per-node="a40:8"
-#SBATCH --qos="short"
+#SBATCH --qos="long"
 #SBATCH --mem-per-gpu=45G
 
 export HOME="/coc/testnvme/chuang475"
@@ -32,13 +32,13 @@ srun -u ${PYTHON_BIN} -m torch.distributed.run \
   --nnodes=1 \
   --nproc_per_node=8 \
   vla-scripts/train.py \
-  --vla.type "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops" \
+  --vla.type "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2" \
   --data_root_dir "/coc/testnvme/chuang475/projects/openvla-mini/data/modified_libero_rlds" \
   --run_root_dir "log/" \
-  --wandb_project "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops" \
+  --wandb_project "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2" \
   --wandb_entity "chuang475-georgia-institute-of-technology" \
-  # --pretrained_checkpoint "log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90+n1+b24+lr2e-05+e10+x7/checkpoints/step-100000-epoch-28-loss=0.0309.pt" \
-  # --resume_step 100000 \
-  # --resume_epoch 28 \
+  # --pretrained_checkpoint "log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops+n1+b24+lr2e-05+e10+x7/checkpoints/step-110000-epoch-36-loss=0.0409.pt" \
+  # --resume_step 110000 \
+  # --resume_epoch 36 \
 
   #"prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90" \

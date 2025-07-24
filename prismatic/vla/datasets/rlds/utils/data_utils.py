@@ -276,9 +276,10 @@ def save_dataset_statistics(dataset_statistics, run_dir):
     out_path = run_dir / "dataset_statistics.json"
     with open(out_path, "w") as f_json:
         for _, stats in dataset_statistics.items():
-            for k in stats["action"].keys():
-                if isinstance(stats["action"][k], np.ndarray):
-                    stats["action"][k] = stats["action"][k].tolist()
+            if "action" in stats:
+                for k in stats["action"].keys():
+                    if isinstance(stats["action"][k], np.ndarray):
+                        stats["action"][k] = stats["action"][k].tolist()
             if "proprio" in stats:
                 for k in stats["proprio"].keys():
                     if isinstance(stats["proprio"][k], np.ndarray):

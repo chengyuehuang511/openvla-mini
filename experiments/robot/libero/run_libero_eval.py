@@ -190,78 +190,78 @@ def eval_libero(cfg: GenerateConfig) -> None:
             print(f"Starting episode {task_episodes+1}...")
             log_file.write(f"Starting episode {task_episodes+1}...\n")
             while t < max_steps + cfg.num_steps_wait:
-                try:
-                    # IMPORTANT: Do nothing for the first few timesteps because the simulator drops objects
-                    # and we need to wait for them to fall
-                    if t < cfg.num_steps_wait:
-                        obs, reward, done, info = env.step(get_libero_dummy_action(cfg.model_family))
-                        t += 1
-                        continue
-
-                    # Get preprocessed image
-                    img = get_libero_image(obs, resize_size)
-
-                    # Save preprocessed image for replay video
-                    replay_images.append(img)
-
-                    # use_wrist_image
-                    if cfg.use_wrist_image:
-                        wrist_img = get_libero_image(obs, resize_size, key="robot0_eye_in_hand_image")
-                        replay_wrist_images.append(wrist_img)
-
-                    # buffering #obs_history images, optionally
-                    image_history = replay_images[-cfg.obs_history :]
-                    if len(image_history) < cfg.obs_history:
-                        image_history.extend([replay_images[-1]] * (cfg.obs_history - len(image_history)))
-
-                    # same but for optional wrist images
-                    if cfg.use_wrist_image:
-                        wrist_image_history = replay_wrist_images[-cfg.obs_history :]
-                        if len(wrist_image_history) < cfg.obs_history:
-                            wrist_image_history.extend(
-                                [replay_wrist_images[-1]] * (cfg.obs_history - len(wrist_image_history))
-                            )
-                        # interleaved images [... image_t, wrist_t ...]
-                        image_history = [val for tup in zip(image_history, wrist_image_history) for val in tup]
-
-                    # Prepare observations dict
-                    # Note: OpenVLA does not take proprio state as input
-                    observation = {
-                        "full_image": image_history,
-                        "state": np.concatenate(
-                            (obs["robot0_eef_pos"], quat2axisangle(obs["robot0_eef_quat"]), obs["robot0_gripper_qpos"])
-                        ),
-                    }
-
-                    # Query model to get action
-                    action = get_action(
-                        cfg,
-                        model,
-                        observation,
-                        task_description,
-                        processor=processor,
-                    )
-
-                    # Normalize gripper action [0,1] -> [-1,+1] because the environment expects the latter
-                    action = normalize_gripper_action(action, binarize=True)
-
-                    # [OpenVLA] The dataloader flips the sign of the gripper action to align with other datasets
-                    # (0 = close, 1 = open), so flip it back (-1 = open, +1 = close) before executing the action
-                    if cfg.model_family in ["openvla", "prismatic"]:
-                        action = invert_gripper_action(action)
-
-                    # Execute action in environment
-                    obs, reward, done, info = env.step(action.tolist())
-                    if done:
-                        task_successes += 1
-                        total_successes += 1
-                        break
+                # try:
+                # IMPORTANT: Do nothing for the first few timesteps because the simulator drops objects
+                # and we need to wait for them to fall
+                if t < cfg.num_steps_wait:
+                    obs, reward, done, info = env.step(get_libero_dummy_action(cfg.model_family))
                     t += 1
+                    continue
 
-                except Exception as e:
-                    print(f"Caught exception: {e}")
-                    log_file.write(f"Caught exception: {e}\n")
+                # Get preprocessed image
+                img = get_libero_image(obs, resize_size)
+
+                # Save preprocessed image for replay video
+                replay_images.append(img)
+
+                # use_wrist_image
+                if cfg.use_wrist_image:
+                    wrist_img = get_libero_image(obs, resize_size, key="robot0_eye_in_hand_image")
+                    replay_wrist_images.append(wrist_img)
+
+                # buffering #obs_history images, optionally
+                image_history = replay_images[-cfg.obs_history :]
+                if len(image_history) < cfg.obs_history:
+                    image_history.extend([replay_images[-1]] * (cfg.obs_history - len(image_history)))
+
+                # same but for optional wrist images
+                if cfg.use_wrist_image:
+                    wrist_image_history = replay_wrist_images[-cfg.obs_history :]
+                    if len(wrist_image_history) < cfg.obs_history:
+                        wrist_image_history.extend(
+                            [replay_wrist_images[-1]] * (cfg.obs_history - len(wrist_image_history))
+                        )
+                    # interleaved images [... image_t, wrist_t ...]
+                    image_history = [val for tup in zip(image_history, wrist_image_history) for val in tup]
+
+                # Prepare observations dict
+                # Note: OpenVLA does not take proprio state as input
+                observation = {
+                    "full_image": image_history,
+                    "state": np.concatenate(
+                        (obs["robot0_eef_pos"], quat2axisangle(obs["robot0_eef_quat"]), obs["robot0_gripper_qpos"])
+                    ),
+                }
+
+                # Query model to get action
+                action = get_action(
+                    cfg,
+                    model,
+                    observation,
+                    task_description,
+                    processor=processor,
+                )
+
+                # Normalize gripper action [0,1] -> [-1,+1] because the environment expects the latter
+                action = normalize_gripper_action(action, binarize=True)
+
+                # [OpenVLA] The dataloader flips the sign of the gripper action to align with other datasets
+                # (0 = close, 1 = open), so flip it back (-1 = open, +1 = close) before executing the action
+                if cfg.model_family in ["openvla", "prismatic"]:
+                    action = invert_gripper_action(action)
+
+                # Execute action in environment
+                obs, reward, done, info = env.step(action.tolist())
+                if done:
+                    task_successes += 1
+                    total_successes += 1
                     break
+                t += 1
+
+                # except Exception as e:
+                #     print(f"Caught exception: {e}")
+                #     log_file.write(f"Caught exception: {e}\n")
+                #     break
 
             task_episodes += 1
             total_episodes += 1

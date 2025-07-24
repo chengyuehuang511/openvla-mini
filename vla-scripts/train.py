@@ -38,6 +38,9 @@ from prismatic.util import set_global_seed
 from prismatic.vla import get_vla_dataset_and_collator
 from prismatic.vla.datasets.rlds.utils.data_utils import save_dataset_statistics
 
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
+from transformers import BitsAndBytesConfig
+
 # Sane Defaults
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
@@ -60,6 +63,14 @@ class TrainConfig:
         "datasets/open-x-embodiment"
     )
     run_root_dir: Path = Path("runs")                               # Path to directory to store logs & checkpoints
+    adapter_tmp_dir: Path = Path("adapter-tmp")                     # Temporary directory for LoRA weights before fusing
+
+    # LoRA Arguments
+    use_lora: bool = False                                          # Whether to use LoRA fine-tuning
+    lora_rank: int = 32                                             # Rank of LoRA weight matrix
+    lora_dropout: float = 0.0                                       # Dropout applied to LoRA weights
+    use_quantization: bool = False                                  # Whether to 4-bit quantize VLA for LoRA fine-tuning
+                                                                    #   => CAUTION: Reduces memory but hurts performance
 
     # Resume Run Parameters
     pretrained_checkpoint: Optional[Path] = None                    # Absolute Path to Checkpoint
@@ -127,6 +138,10 @@ def train(cfg: TrainConfig) -> None:
         if cfg.run_id is None
         else cfg.run_id
     )
+    if cfg.use_lora:
+        cfg.run_id += f"+lora-r{cfg.lora_rank}+dropout-{cfg.lora_dropout}"
+    if cfg.use_quantization:
+        cfg.run_id += "+q-4bit"
     if cfg.run_id_note is not None:
         cfg.run_id += f"--{cfg.run_id_note}"
     if cfg.image_aug:
@@ -137,7 +152,16 @@ def train(cfg: TrainConfig) -> None:
     hf_token = cfg.hf_token.read_text().strip() if isinstance(cfg.hf_token, Path) else os.environ[cfg.hf_token]
     worker_init_fn = set_global_seed(cfg.seed, get_worker_init_fn=True)
     os.makedirs(run_dir := (cfg.run_root_dir / cfg.run_id), exist_ok=True)
+    adapter_dir = cfg.adapter_tmp_dir / cfg.run_id
     os.makedirs(cfg.run_root_dir / cfg.run_id / "checkpoints", exist_ok=True)
+
+    # Quantization Config =>> only if LoRA fine-tuning
+    quantization_config = None
+    if cfg.use_quantization:
+        assert cfg.use_lora, "Quantized training only supported for LoRA fine-tuning!"
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True, bnb_4bit_compute_dtype=torch.bfloat16, bnb_4bit_quant_type="nf4"
+        )
 
     # Save Configuration =>> additionally save a JSON version for later HF Integration
     if overwatch.is_rank_zero():
@@ -171,6 +195,24 @@ def train(cfg: TrainConfig) -> None:
     # [Validate] Model should be in Full Precision!
     for param in vlm.parameters():
         assert param.dtype == torch.float32, f"Loaded VLM parameter not in full precision: {param}"
+
+    # Device Placement =>> note that BitsAndBytes automatically handles for quantized training
+    # if cfg.use_quantization:
+    #     vlm = prepare_model_for_kbit_training(vlm)
+    # else:
+    #     vlm = vlm.to(device_id)
+
+    # [LoRA] Wrap Model w/ PEFT `LoraConfig` =>> by default we set `target_modules=all-linear`
+    if cfg.use_lora:
+        lora_config = LoraConfig(
+            r=cfg.lora_rank,
+            lora_alpha=min(cfg.lora_rank, 16),
+            lora_dropout=cfg.lora_dropout,
+            target_modules="all-linear",
+            init_lora_weights="gaussian",
+        )
+        vlm = get_peft_model(vlm, lora_config)
+        vlm.print_trainable_parameters()
 
     # Determine training "stage" based on frozen vs unfrozen parameters --> supports different fine-tuning schemes!
     if not cfg.vla.freeze_vision_backbone and not cfg.vla.freeze_llm_backbone:
@@ -245,7 +287,9 @@ def train(cfg: TrainConfig) -> None:
         worker_init_fn=worker_init_fn,
         save_every_n_steps=cfg.save_every_n_steps,
     )
-    train_strategy.run_setup(run_dir=run_dir, n_train_examples=len(vla_dataset))
+    # If LoRA, we first save adapter weights, then merge into full model; otherwise, default save!
+    save_dir = adapter_dir if cfg.use_lora else run_dir
+    train_strategy.run_setup(run_dir=save_dir, n_train_examples=len(vla_dataset))
 
     # Create Metrics =>> Handles on the fly tracking, logging to specified trackers (e.g., JSONL, Weights & Biases)
     overwatch.info(f"Creating Metrics with Active Trackers => `{cfg.trackers}`")

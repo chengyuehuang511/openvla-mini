@@ -24,7 +24,7 @@ from prismatic.training.metrics import Metrics, VLAMetrics
 from prismatic.util import check_bloat16_supported
 from prismatic.util.batching_utils import SplitModalitySampler
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction, PaddedCollatorForLanguageModeling
-from prismatic.vla.action_tokenizer import ActionTokenizer
+from prismatic.vla.action_tokenizer import ActionTokenizer, LanguageActionTokenizer
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -308,6 +308,48 @@ class TrainingStrategy(ABC):
                         labels=batch["labels"],
                     )
                     loss = output.loss
+                    is_action = torch.tensor([True] * len(batch["labels"]), device=output.logits.device)
+                    shift_logits = output.logits[:, self.vlm.vision_backbone.num_patches : -1]
+                    shift_labels = batch["labels"][:, 1:].to(shift_logits.device)
+
+                    if isinstance(action_tokenizer, LanguageActionTokenizer):
+                        # Sanity Check Loss
+
+                        sanity_check_loss = torch.nn.functional.cross_entropy(
+                            shift_logits.reshape(-1, shift_logits.size(-1)),  # [B * T, V]
+                            shift_labels.reshape(-1),                         # [B * T]
+                        )
+                        assert torch.isclose(
+                            loss, sanity_check_loss, atol=1e-1
+                        ), f"Loss mismatch: {loss.item()} != {sanity_check_loss.item()}"
+                        
+                        batch_type = ["vqa" if "vqa" in name.decode() else "action" for name in batch["dataset_names"]]
+                        is_action = torch.tensor([bt == "action" for bt in batch_type], device=output.logits.device)
+                        
+                        # Initialize logits mask: [B, T, V]
+                        mask = torch.full_like(shift_logits, -1e8)  # shape: (B, T, V)
+
+                        # Apply token-specific masking per sample
+                        for i, bt in enumerate(batch_type):
+                            # assert action_tokenizer.tokenizer.vocab_size == action_tokenizer.action_token_begin_idx + 1, \
+                            #     f"Action tokenizer vocab size ({action_tokenizer.tokenizer.vocab_size}) must match action token begin index + 1 ({action_tokenizer.action_token_begin_idx + 1})!"
+
+                            if bt == "action":
+                                # Allow only action token range
+                                # TODO: sanity check the mask index
+                                mask[i, :, action_tokenizer.tokenizer.vocab_size:] = 0
+                            elif bt == "vqa":
+                                # Allow only language token range
+                                mask[i, :, :action_tokenizer.action_token_begin_idx] = 0 # action_tokenizer.tokenizer.vocab_size
+                            else:
+                                raise ValueError(f"Unsupported `batch_type` = {bt}")
+
+                        # Apply Mask to Shifted Logits and update Loss
+                        shift_logits += mask
+                        loss = torch.nn.functional.cross_entropy(
+                            shift_logits.reshape(-1, shift_logits.size(-1)),  # [B * T, V]
+                            shift_labels.reshape(-1),                         # [B * T]
+                        )
 
                 # Commit Loss =>> Backward!
                 metrics.commit(loss=loss)
@@ -324,22 +366,45 @@ class TrainingStrategy(ABC):
                 #   2) Compute boolean "mask" where "labels > 2" (where 2 is ID for `EOS_TOKEN`)
                 #           => If masking out EOS, then it's just "labels != -100 (IGNORE_INDEX)
                 #   3) Compute masked accuracy as `(preds == logits) & mask` --> sum/divide by # unmasked!
-                action_preds = output.logits[:, self.vlm.vision_backbone.num_patches : -1].argmax(dim=2)
-                action_gt = batch["labels"][:, 1:].to(action_preds.device)
-                mask = (action_tokenizer.action_token_end_idx > action_gt) & (action_gt > action_tokenizer.action_token_begin_idx)
+                action_preds = shift_logits.argmax(dim=2)
+                action_gt = shift_labels.to(action_preds.device)
+                valid_token_mask = (action_tokenizer.action_token_end_idx > action_gt) & (action_gt > action_tokenizer.action_token_begin_idx)
+
+                # === Mask for action samples only ===
+                # Expand to match (B, T, V) shape
+                sample_mask = is_action.unsqueeze(1).expand(-1, valid_token_mask.shape[1])
+                # Final mask: valid action tokens from action-type samples only
+                mask = valid_token_mask & sample_mask  # (B, T, V)
 
                 # Compute Accuracy
                 correct_preds = (action_preds == action_gt) & mask
-                action_accuracy = correct_preds.sum().float() / mask.sum().float()
+                action_accuracy = correct_preds.sum().float() / mask.sum().float().clamp(min=1)
 
-                # Compute L1 Loss on Predicted (Continuous) Actions
-                continuous_actions_pred = torch.tensor(
-                    action_tokenizer.decode_token_ids_to_actions(action_preds[mask].cpu().numpy())
-                )
-                continuous_actions_gt = torch.tensor(
-                    action_tokenizer.decode_token_ids_to_actions(action_gt[mask].cpu().numpy())
-                )
-                action_l1_loss = torch.nn.functional.l1_loss(continuous_actions_pred, continuous_actions_gt)
+                # # Compute L1 Loss on Predicted (Continuous) Actions
+                # continuous_actions_pred = torch.tensor(
+                #     action_tokenizer.decode_token_ids_to_actions(action_preds[mask].cpu().numpy())
+                # )
+                # continuous_actions_gt = torch.tensor(
+                #     action_tokenizer.decode_token_ids_to_actions(action_gt[mask].cpu().numpy())
+                # )
+                # action_l1_loss = torch.nn.functional.l1_loss(continuous_actions_pred, continuous_actions_gt)
+
+                # === L1 Loss ===
+                # Use only masked entries
+                pred_ids = action_preds[mask]  # (N,)
+                gt_ids = action_gt[mask]       # (N,)
+
+                # Decode to continuous action values
+                if pred_ids.numel() > 0:
+                    continuous_actions_pred = torch.tensor(
+                        action_tokenizer.decode_token_ids_to_actions(pred_ids.cpu().numpy())
+                    )
+                    continuous_actions_gt = torch.tensor(
+                        action_tokenizer.decode_token_ids_to_actions(gt_ids.cpu().numpy())
+                    )
+                    action_l1_loss = torch.nn.functional.l1_loss(continuous_actions_pred, continuous_actions_gt)
+                else:
+                    action_l1_loss = torch.tensor(0.0)
 
                 # Commit Metrics
                 metrics.commit(action_accuracy=action_accuracy, l1_loss=action_l1_loss, update_step_time=True)
@@ -393,6 +458,36 @@ class TrainingStrategy(ABC):
                         metrics.run_dir, metrics.global_step, epoch, loss.item(), only_trainable=not save_full_model
                     )
                     dist.barrier()
+
+                    # # Merge LoRA weights into model backbone for faster inference
+                    # #   =>> Note that merging is slow and can be done post-hoc to speed up training
+                    # if cfg.use_lora:
+                    #     base_vla = AutoModelForVision2Seq.from_pretrained(
+                    #         cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
+                    #     )
+                    #     merged_vla = PeftModel.from_pretrained(base_vla, adapter_dir)
+                    #     merged_vla = merged_vla.merge_and_unload()
+                    #     if distributed_state.is_main_process:
+                    #         if cfg.save_latest_checkpoint_only:
+                    #             # Overwrite latest checkpoint
+                    #             merged_vla.save_pretrained(run_dir)
+
+                    #             print(f"Saved Model Checkpoint for Step {gradient_step_idx} at: {run_dir}")
+                    #         else:
+                    #             # Prepare to save checkpoint in new directory
+                    #             checkpoint_dir = Path(str(run_dir) + f"--{gradient_step_idx}_chkpt")
+                    #             os.makedirs(checkpoint_dir, exist_ok=True)
+
+                    #             # Save dataset statistics to new directory
+                    #             save_dataset_statistics(vla_dataset.dataset_statistics, checkpoint_dir)
+
+                    #             # Save processor and model weights to new directory
+                    #             processor.save_pretrained(checkpoint_dir)
+                    #             merged_vla.save_pretrained(checkpoint_dir)
+
+                    #             print(f"Saved Model Checkpoint for Step {gradient_step_idx} at: {checkpoint_dir}")
+                    
+                    # dist.barrier()
 
                     if terminate:
                         return

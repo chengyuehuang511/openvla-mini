@@ -15,7 +15,8 @@ from transformers.models.qwen2.tokenization_qwen2_fast import Qwen2TokenizerFast
 
 from prismatic.models.vlms.prismatic import PrismaticVLM
 from prismatic.overwatch import initialize_overwatch
-from prismatic.vla.action_tokenizer import ActionTokenizer
+from prismatic.vla.action_tokenizer import ActionTokenizer, LanguageActionTokenizer
+from prismatic.vla.action_logits_process import ActionTokenFilter
 
 # Initialize Overwatch =>> Wraps `logging.Logger`
 overwatch = initialize_overwatch(__name__)
@@ -32,6 +33,10 @@ class OpenVLA(PrismaticVLM):
         super().__init__(*args, **kwargs)
         self.norm_stats = norm_stats
         self.action_tokenizer = action_tokenizer
+    
+    @torch.inference_mode()
+    def predict_answer(self):  # TODO
+        pass
 
     @torch.inference_mode()
     def predict_action(
@@ -82,12 +87,22 @@ class OpenVLA(PrismaticVLM):
         autocast_dtype = self.llm_backbone.half_precision_dtype
         with torch.autocast("cuda", dtype=autocast_dtype, enabled=self.enable_mixed_precision_training):
             # fmt: off
-            generated_ids = super(PrismaticVLM, self).generate(
-                input_ids=input_ids,                            # Shape: [1, seq]
-                pixel_values=pixel_values,                      # Shape: [1, (opt T,) 3, res, res] or Dict[str, ...]
-                max_new_tokens=self.get_action_dim(unnorm_key),
-                **kwargs
-            )
+            if isinstance(self.action_tokenizer, LanguageActionTokenizer):
+                logits_processor = ActionTokenFilter(valid_ids=torch.arange(self.action_tokenizer.action_token_begin_idx, self.action_tokenizer.action_token_end_idx).to(self.device))
+                generated_ids = super(PrismaticVLM, self).generate(
+                    input_ids=input_ids,                            # Shape: [1, seq]
+                    pixel_values=pixel_values,                      # Shape: [1, (opt T,) 3, res, res] or Dict[str, ...]
+                    max_new_tokens=self.get_action_dim(unnorm_key),
+                    logits_processor=logits_processor,
+                    **kwargs
+                )
+            else:
+                generated_ids = super(PrismaticVLM, self).generate(
+                    input_ids=input_ids,                            # Shape: [1, seq]
+                    pixel_values=pixel_values,                      # Shape: [1, (opt T,) 3, res, res] or Dict[str, ...]
+                    max_new_tokens=self.get_action_dim(unnorm_key),
+                    **kwargs
+                )
             # fmt: on
 
         # Extract predicted action tokens and translate into (normalized) continuous actions

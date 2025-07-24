@@ -16,7 +16,7 @@ from prismatic.models.backbones.vision import ImageTransform
 from prismatic.models.backbones.vision.base_vision import WrapSequenceImageTransform
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
 from prismatic.vla.action_tokenizer import ACTION_TOKENIZERS, ActionTokenizer
-from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset
+from prismatic.vla.datasets import EpisodicRLDSDataset, RLDSBatchTransform, RLDSDataset, VQABatchTransform
 
 
 def get_vla_dataset_and_collator(
@@ -64,6 +64,13 @@ def get_vla_dataset_and_collator(
         image_window_size=image_window_size,
         use_wrist_image=use_wrist_image,
     )
+    vqa_batch_transform = VQABatchTransform(
+        tokenizer,
+        image_transform,
+        prompt_builder_fn,
+        predict_stop_token=predict_stop_token,
+        image_window_size=image_window_size,
+    )
     collator = PaddedCollatorForActionPrediction(
         tokenizer.model_max_length, tokenizer.pad_token_id, padding_side=padding_side
     )
@@ -81,6 +88,7 @@ def get_vla_dataset_and_collator(
         future_action_window_size=future_action_window_size,
         image_window_size=image_window_size,
         load_camera_views=load_camera_views,
+        vqa_batch_transform=vqa_batch_transform
     )
 
     return dataset, action_tokenizer, collator

@@ -104,6 +104,64 @@ class RLDSBatchTransform:
         return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels, dataset_name=dataset_name)
 
 
+@dataclass
+class VQABatchTransform:
+    base_tokenizer: PreTrainedTokenizerBase
+    image_transform: ImageTransform
+    prompt_builder_fn: Type[PromptBuilder]
+    predict_stop_token: bool = True
+    image_window_size: int = 1
+
+    def __call__(self, batch: Dict[str, Any]) -> Dict[str, Any]:
+        """Converts a VQA batch to the format expected by the OpenVLA collator/models."""
+        dataset_name = batch["dataset_name"]
+        lang = batch["task"]["language_instruction"].decode().lower().split("<ans>")[0]
+        ans = batch["task"]["language_instruction"].decode().lower().split("<ans>")[1]
+
+        # either a single or multi image, depending on image_window_size
+        if self.image_window_size == 1:
+            img = Image.fromarray(batch["observation"]["image_primary"][0])
+        else:
+            img = [Image.fromarray(batch["observation"]["image_primary"][t]) for t in range(self.image_window_size)]
+
+        conversation = []
+
+        ans_tokens = self.base_tokenizer(ans)["input_ids"]
+
+        conversation.extend(
+            [
+                {"from": "human", "value": f"Question: {lang}"},
+                {"from": "gpt", "value": f"Answer: {ans}"},
+            ]
+        )
+        num_answer_tokens = len(ans_tokens)
+
+        # Construct Chat-based Prompt
+        prompt_builder = self.prompt_builder_fn("openvla")
+        for turn in conversation:
+            prompt_builder.add_turn(turn["from"], turn["value"])
+
+        # Tokenize (w/ `base_tokenizer`)
+        input_ids = self.base_tokenizer(prompt_builder.get_prompt(), add_special_tokens=True).input_ids
+        labels = list(input_ids)
+
+        # Tensorize =>> Run Image Transform to get `pixel_values` =>> Return
+        input_ids, labels = torch.tensor(input_ids), torch.tensor(labels)
+        pixel_values = self.image_transform(img)
+
+        # critical, some tokenizers have different numbers of "end tokens".
+        num_end_tokens = 1
+        if isinstance(self.base_tokenizer, Qwen2TokenizerFast):
+            # Qwen has <|im_end|><|endoftext|> for example
+            num_end_tokens = 2
+
+        labels[: -(num_answer_tokens + num_end_tokens)] = IGNORE_INDEX
+        if not self.predict_stop_token:
+            labels[-num_end_tokens:] = IGNORE_INDEX
+
+        return dict(pixel_values=pixel_values, input_ids=input_ids, labels=labels, dataset_name=dataset_name)
+
+
 class RLDSDataset(IterableDataset):
     def __init__(
         self,
@@ -117,9 +175,10 @@ class RLDSDataset(IterableDataset):
         future_action_window_size: int = 0,
         image_window_size: int = 1,
         load_camera_views: tuple = ("primary",),
+        vqa_batch_transform: VQABatchTransform = None,
     ) -> None:
         """Lightweight wrapper around RLDS TFDS Pipeline for use with PyTorch/OpenVLA Data Loaders."""
-        self.data_root_dir, self.data_mix, self.batch_transform = data_root_dir, data_mix, batch_transform
+        self.data_root_dir, self.data_mix, self.batch_transform, self.vqa_batch_transform = data_root_dir, data_mix, batch_transform, vqa_batch_transform
 
         # Configure RLDS Dataset(s)
         if self.data_mix in OXE_NAMED_MIXTURES:
@@ -129,7 +188,7 @@ class RLDSDataset(IterableDataset):
             mixture_spec = [(self.data_mix, 1.0)]
 
         # fmt: off
-        per_dataset_kwargs, weights = get_oxe_dataset_kwargs_and_weights(
+        per_dataset_kwargs, weights, per_dataset_types = get_oxe_dataset_kwargs_and_weights(
             self.data_root_dir,
             mixture_spec,
             load_camera_views=load_camera_views,
@@ -156,6 +215,7 @@ class RLDSDataset(IterableDataset):
             traj_transform_threads=len(mixture_spec),
             traj_read_threads=len(mixture_spec),
             train=train,
+            dataset_types=per_dataset_types,
         )
 
         # If applicable, enable image augmentations
@@ -184,7 +244,10 @@ class RLDSDataset(IterableDataset):
 
     def __iter__(self) -> Dict[str, Any]:
         for rlds_batch in self.dataset.as_numpy_iterator():
-            yield self.batch_transform(rlds_batch)
+            if rlds_batch["type"].decode("utf-8") == "vqa":
+                yield self.vqa_batch_transform(rlds_batch)
+            else:
+                yield self.batch_transform(rlds_batch)
 
     def __len__(self) -> int:
         return self.dataset_length

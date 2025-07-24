@@ -3,7 +3,7 @@
 #SBATCH --partition="kira-lab,overcap"
 #SBATCH --nodes=1
 #SBATCH --cpus-per-gpu=16
-#SBATCH --gpus-per-node="l40s:1"
+#SBATCH --gpus-per-node="a40:1"
 #SBATCH --qos="short"
 #SBATCH --mem-per-gpu=45G
 

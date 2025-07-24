@@ -91,7 +91,7 @@ def get_vla(cfg):
 
     # Load dataset stats used during finetuning (for action un-normalization).
     dataset_statistics_path = os.path.join(cfg.pretrained_checkpoint, "dataset_statistics.json")
-    dataset_statistics_path_alt = os.path.join("/coc/testnvme/chuang475/projects/openvla-mini/log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90+n1+b24+lr2e-05+e10+x7", "dataset_statistics.json")
+    dataset_statistics_path_alt = os.path.join("log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops+n1+b24+lr2e-05+e10+x7", "dataset_statistics.json")
     if os.path.isfile(dataset_statistics_path):
         with open(dataset_statistics_path, "r") as f:
             norm_stats = json.load(f)

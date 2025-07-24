@@ -97,6 +97,35 @@ class ActionTokenizer:
     def required_future_horizon(self) -> int:
         # the number of future action horizon elements
         return 0
+    
+
+class LanguageActionTokenizer(ActionTokenizer):
+    def __init__(
+        self,
+        tokenizer: PreTrainedTokenizerBase,
+        bins: int = 256,
+        min_action: int = -1,
+        max_action: int = 1,
+        use_extra: bool = False,
+    ) -> None:
+        super().__init__(tokenizer, bins, min_action, max_action, use_extra)
+
+    def decode_token_ids_to_actions(self, action_token_ids: np.ndarray) -> np.ndarray:
+        discretized_actions = self.tokenizer_len - action_token_ids
+        # since we use the logit masking, the actions are guaranteed to be in the range [0, n_bins-1]
+        # assert np.all(discretized_actions >= 1) and np.all(discretized_actions <= self.bin_centers.shape[0] + 1), (
+        #     f"Discretized actions out of bounds: {discretized_actions}, "
+        #     f"should be between [1, {self.bin_centers.shape[0] + 1}]"
+        # )
+        discretized_actions = np.clip(discretized_actions - 1, a_min=0, a_max=self.bin_centers.shape[0] - 1)
+
+        return self.bin_centers[discretized_actions]
+    
+    def decode_token_ids_to_text(self, text_token_ids: np.ndarray) -> Union[str, List[str]]:
+        if len(text_token_ids.shape) <= 1:
+            return self.tokenizer.decode(text_token_ids, skip_special_tokens=True)
+        else:
+            return self.tokenizer.batch_decode(text_token_ids, skip_special_tokens=True)
 
 
 class VQActionTokenizer(ActionTokenizer):
@@ -189,6 +218,8 @@ class VQActionTokenizer(ActionTokenizer):
 ACTION_TOKENIZERS = {
     "action_tokenizer": ActionTokenizer,
     "extra_action_tokenizer": partial(ActionTokenizer, use_extra=True),
+    "language_action_tokenizer": LanguageActionTokenizer,
+    "language_extra_action_tokenizer": partial(LanguageActionTokenizer, use_extra=True),
     # libero
     "libero_vq_action_tokenizer": partial(
         VQActionTokenizer, vq_vae_path="vq/pretrain_vq+mx-libero_90+fach-7+ng-7+nemb-128+nlatent-512"
