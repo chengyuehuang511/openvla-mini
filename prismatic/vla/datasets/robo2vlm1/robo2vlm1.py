@@ -18,6 +18,10 @@ _CITATION = (
       'primaryClass={cs.RO},'
       'url={https://arxiv.org/abs/2505.15517},}')
 
+_IMAGE_DIR = '~/datasets/robo2vlm1'
+_TRAIN_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/train_annots.json'
+_VAL_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/val_annots.json'
+
 class Robo2VLM1(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for Robo2VLM1 dataset."""
 
