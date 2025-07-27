@@ -55,13 +55,13 @@ class Blink(tfds.core.GeneratorBasedBuilder):
 
     def _split_generators(self, dl_manager):
         return {
-            'train': self._generate_examples(split='train'),
+            'train': self._generate_examples(split='val'),
             'validation': self._generate_examples(split='val'),
             'test': self._generate_examples(split='test'),
         }
 
     def _generate_examples(self, split):
-        dataset = load_dataset("BLINK-Benchmark/BLINK", "full", split=split)
+        dataset = load_dataset("BLINK-Benchmark/BLINK", "Jigsaw", split=split)
 
         for idx, example in enumerate(dataset):
             image_list = []
