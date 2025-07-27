@@ -1,4 +1,3 @@
-from datasets import load_dataset
 import tensorflow_datasets as tfds
 import json
 import os
@@ -7,6 +6,16 @@ from absl import logging
 import numpy as np
 import pandas as pd
 import tensorflow as tf
+
+r"""
+make sure to rename the datasets folder before running the script!
+
+TFDS_DATA_DIR=/storage/home/hcoda1/8/mzhang445/p-smukhopadhyay6-0/datasets/tensorflow-datasets
+tfds build --datasets=robo2vlm1
+
+
+"""
+
 
 _CITATION = (
     '@misc{chen2025robo2vlmvisualquestionanswering,'
@@ -18,12 +27,13 @@ _CITATION = (
       'primaryClass={cs.RO},'
       'url={https://arxiv.org/abs/2505.15517},}')
 
-_IMAGE_DIR = '~/datasets/robo2vlm1'
-_TRAIN_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/train_annots.json'
-_VAL_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/val_annots.json'
+_IMAGE_DIR = '/storage/home/hcoda1/8/mzhang445/p-smukhopadhyay6-0/datasets/robo2vlm1/images'
 
-class Robo2VLM1(tfds.core.GeneratorBasedBuilder):
+class Robo2vlm1(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for Robo2VLM1 dataset."""
+    VERSION = tfds.core.Version('3.0.0')
+
+    code_path = None
 
     def _info(self) -> tfds.core.DatasetInfo:
         return tfds.core.DatasetInfo(
@@ -33,7 +43,7 @@ class Robo2VLM1(tfds.core.GeneratorBasedBuilder):
                 'image/id': np.int32,
                 'image/filename': tfds.features.Text(),
                 'image': tfds.features.Image(encoding_format='jpeg'),
-                'question_id': np.int32,
+                'question_id': tfds.features.Text(),
                 'question_type': tfds.features.Text(),
                 'question_text': tfds.features.Text(),
                 'answer_type': tfds.features.Text(),
@@ -49,26 +59,30 @@ class Robo2VLM1(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
         return {
-            'train': self._generate_examples('train'),
-            'val': self._generate_examples('val'),
             'test': self._generate_examples('test'),
         }
 
-    def _generate_examples(self, split, image_folder=None):
+    def _generate_examples(self, split):
         """Yields (key, example) tuples from the dataset."""
-        image_folder = image_folder or split
+        from datasets import load_dataset
+        image_folder = os.path.join(_IMAGE_DIR, split)
         os.makedirs(image_folder, exist_ok=True)
 
         dataset = load_dataset('keplerccc/Robo2VLM-1', split=split)
 
-        for item in dataset:
+        for idx, item in enumerate(dataset):
+            image_id = idx
             qid = item['id']
-            question = item['question']
-            choices = item['choices']
-            correct_answer = item['correct_answer']
+            
             image = item['image']
+            choices = eval(item['choices'])
             answer_type = 'other'
             question_type = 'unknown'
+
+            answer = str(item['correct_answer'])
+
+            options = ", ".join([f"{i}: {choice}" for i, choice in enumerate(choices)])
+            question = item['question'] + f" Please select the number corresponding to your answer from among these options: [{options}]."
 
             image_filepath = os.path.join(image_folder, f'{image_id}.jpg')
             image.save(image_filepath)
@@ -81,7 +95,7 @@ class Robo2VLM1(tfds.core.GeneratorBasedBuilder):
                 'question_type': question_type,
                 'question_text': question,
                 'answer_type': answer_type,
-                'answers': answers,
-                'answer_confidences': item.get('answer_confidences'),
-                'top_answer': item.get('top_answer'),
+                'answers': [answer] * 10,
+                'answer_confidences': ['yes'] * 10,
+                'top_answer': answer,
             }
