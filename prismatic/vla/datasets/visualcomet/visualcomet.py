@@ -16,9 +16,9 @@ _CITATION = """
 }
 """
 
-_IMAGE_DIR = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/images/visualcomet-bbox'
-_TRAIN_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/train_annots.json'
-_VAL_JSON_PATH = '/home/hice1/skim3513/scratch/VLA-VQA/datasets_src/datasets_files/visualcomet/val_annots.json'
+_IMAGE_DIR = '/coc/testnvme/chuang475/datasets/visualcomet/visualcomet-bbox'
+_TRAIN_JSON_PATH = '/coc/testnvme/chuang475/datasets/visualcomet/train_annots.json'
+_VAL_JSON_PATH = '/coc/testnvme/chuang475/datasets/visualcomet/val_annots.json'
 
 class Visualcomet(tfds.core.GeneratorBasedBuilder):
   """TFDS-style VisualCOMET dataset."""

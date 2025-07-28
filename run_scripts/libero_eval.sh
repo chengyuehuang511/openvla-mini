@@ -31,11 +31,14 @@ export HUGGINGFACE_HUB_CACHE="/coc/testnvme/chuang475/huggingface_cache"
 
 srun -u ${PYTHON_BIN} -m experiments.robot.libero.run_libero_eval \
   --model_family prismatic \
-  --pretrained_checkpoint /coc/testnvme/chuang475/projects/openvla-mini/log/minivla-libero90-prismatic/checkpoints/step-122500-epoch-55-loss=0.0743.pt \
-  --task_suite_name libero_90 \
+  --pretrained_checkpoint /coc/testnvme/chuang475/projects/openvla-mini/log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops+n1+b16+lr2e-05+e10+x7/checkpoints/step-032500-epoch-41-loss=0.0474.pt \
+  --task_suite_name libero_10 \
   --center_crop True \
 
 # export CUDA_VISIBLE_DEVICES= # disables GPU usage
 # cd /coc/testnvme/chuang475/projects/rlds_dataset_builder/rlbench_rlds_convertor/LIBERO_90
 
 # tfds build --overwrite
+# /coc/testnvme/chuang475/projects/openvla-mini/log/minivla-libero90-prismatic/checkpoints/step-122500-epoch-55-loss=0.0743.pt
+# /coc/testnvme/chuang475/projects/openvla-mini/log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2+n1+b24+lr2e-05+e10+x7/checkpoints/step-145000-epoch-27-loss=0.1259.pt
+# /coc/testnvme/chuang475/projects/openvla-mini/log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops+n1+b24+lr2e-05+e10+x7/checkpoints/step-165000-epoch-55-loss=0.1394.pt

@@ -281,6 +281,9 @@ def make_dataset_from_vqa(
         split = "train[:95%]" if train else "train[95%:]"
     else:
         split = "train" if train else "validation"
+    
+    if name == "robo2vlm1":
+        split = "test"
 
     # dataset = dl.DLataset.from_tfrecords(builder, split=split, shuffle=shuffle, num_parallel_reads=num_parallel_reads)
     from dlimp.dataset import _wrap

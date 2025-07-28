@@ -27,7 +27,7 @@ _CITATION = (
       'primaryClass={cs.RO},'
       'url={https://arxiv.org/abs/2505.15517},}')
 
-_IMAGE_DIR = '/storage/home/hcoda1/8/mzhang445/p-smukhopadhyay6-0/datasets/robo2vlm1/images'
+_IMAGE_DIR = '/nethome/chuang475/flash/robo2vlm1/images'
 
 class Robo2vlm1(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for Robo2VLM1 dataset."""
@@ -59,6 +59,7 @@ class Robo2vlm1(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Returns SplitGenerators."""
         return {
+            'train': self._generate_examples('train'),
             'test': self._generate_examples('test'),
         }
 

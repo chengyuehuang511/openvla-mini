@@ -32,10 +32,10 @@ srun -u ${PYTHON_BIN} -m torch.distributed.run \
   --nnodes=1 \
   --nproc_per_node=8 \
   vla-scripts/train.py \
-  --vla.type "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2" \
+  --vla.type "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops" \
   --data_root_dir "/coc/testnvme/chuang475/projects/openvla-mini/data/modified_libero_rlds" \
   --run_root_dir "log/" \
-  --wandb_project "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2" \
+  --wandb_project "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops" \
   --wandb_entity "chuang475-georgia-institute-of-technology" \
   # --pretrained_checkpoint "log/prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops+n1+b24+lr2e-05+e10+x7/checkpoints/step-110000-epoch-36-loss=0.0409.pt" \
   # --resume_step 110000 \

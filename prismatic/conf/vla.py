@@ -215,6 +215,66 @@ class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VQAv2(Exp_Qwen25_DinoS
 
 
 @dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VisualComet(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup_COFT):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-visualcomet"
+
+    data_mix: str = "libero_90_no_noops_visualcomet"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 16 * 8  # 192
+    per_device_batch_size: int = 16
+    epochs: int = 10
+    learning_rate: float = 2e-5
+
+    shuffle_buffer_size: int = 1000
+
+
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_Robo2VLM1(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops-robo2vlm1"
+
+    data_mix: str = "libero_10_no_noops_robo2vlm1"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 16 * 8  # 192
+    per_device_batch_size: int = 16
+    epochs: int = 10
+    learning_rate: float = 2e-5
+
+    shuffle_buffer_size: int = 1000
+
+
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_VQAv2(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops-vqav2"
+
+    data_mix: str = "libero_10_no_noops_vqav2"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 16 * 8  # 192
+    per_device_batch_size: int = 16
+    epochs: int = 10
+    learning_rate: float = 2e-5
+
+    shuffle_buffer_size: int = 1000
+
+
+@dataclass
+class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_VisualComet(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup):
+    vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-10-no_noops-visualcomet"
+
+    data_mix: str = "libero_10_no_noops_visualcomet"
+
+    expected_world_size: int = 8
+    global_batch_size: int = 16 * 8  # 192
+    per_device_batch_size: int = 16
+    epochs: int = 10
+    learning_rate: float = 2e-5
+
+    shuffle_buffer_size: int = 1000
+
+
+@dataclass
 class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VQAv2_HALF(Exp_Qwen25_DinoSigLIP_224px_0_5B_OXE_Magic_Soup_COFT):
     vla_id: str = "prism-qwen25-dinosiglip-224px+0_5b+mx-libero-90-no_noops-vqav2-half"
 
@@ -236,8 +296,8 @@ class Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS(Exp_Qwen25_DinoSigLIP_
     data_mix: str = "libero_10_no_noops"
 
     expected_world_size: int = 8
-    global_batch_size: int = 24 * 8  # 192
-    per_device_batch_size: int = 24
+    global_batch_size: int = 16 * 8  # 128
+    per_device_batch_size: int = 16
     epochs: int = 10
     learning_rate: float = 2e-5
 
@@ -384,6 +444,10 @@ class VLARegistry(Enum):
     QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90_NO_NOOPS_VQA = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VQA
     QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90_NO_NOOPS_VQAv2 = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VQAv2
     QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90_NO_NOOPS_VQAv2_HALF = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VQAv2_HALF
+    QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_90_NO_NOOPS_VISUALCOMET = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_90_NO_NOOPS_VisualComet
+    QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_10_NO_NOOPS_ROBO2VLM1 = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_Robo2VLM1
+    QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_10_NO_NOOPS_VQAv2 = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_VQAv2
+    QWEN25_DINOSIGLIP_224PX_0_5B_LIBERO_10_NO_NOOPS_VISUALCOMET = Exp_Qwen25_DinoSigLIP_224px_0_5B_LIBERO_10_NO_NOOPS_VisualComet
     QWEN25_DINOSIGLIP_224PX_T2_0_5B_LIBERO_90 = Exp_Qwen25_DinoSigLIP_224px_T2_0_5B_LIBERO_90
     QWEN25_DINOSIGLIP_224PX_WRIST_0_5B_LIBERO_90 = Exp_Qwen25_DinoSigLIP_224px_wrist_0_5B_LIBERO_90
 

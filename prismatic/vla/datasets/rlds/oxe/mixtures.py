@@ -224,5 +224,21 @@ OXE_NAMED_MIXTURES: Dict[str, List[Tuple[str, float]]] = {
         ("libero_90_no_noops", 0.5),
         ("vqa", 0.1),  # VQA v2 Dataset
     ],
+    "libero_90_no_noops_visualcomet": [
+        ("libero_90_no_noops", 1.0),
+        ("visualcomet", 1.0),  # VisualComet Dataset
+    ],
+    "libero_10_no_noops_robo2vlm1": [
+        ("libero_10_no_noops", 1.0),
+        ("robo2vlm1", 5.0),  # Robo2VLM1 Dataset
+    ],
+    "libero_10_no_noops_vqav2": [
+        ("libero_10_no_noops", 1.0),
+        ("vqa", 0.07),  # VQA Dataset
+    ],
+    "libero_10_no_noops_visualcomet": [
+        ("libero_10_no_noops", 1.0),
+        ("visualcomet", 0.13),  # VisualComet Dataset
+    ],
 }
 # fmt: on

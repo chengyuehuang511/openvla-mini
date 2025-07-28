@@ -308,13 +308,13 @@ class TrainingStrategy(ABC):
                         labels=batch["labels"],
                     )
                     loss = output.loss
-                    is_action = torch.tensor([True] * len(batch["labels"]), device=output.logits.device)
+                    batch_type = ["vqa" if "vqa" in name.decode() else "action" for name in batch["dataset_names"]]
+                    is_action = torch.tensor([bt == "action" for bt in batch_type], device=output.logits.device)
                     shift_logits = output.logits[:, self.vlm.vision_backbone.num_patches : -1]
                     shift_labels = batch["labels"][:, 1:].to(shift_logits.device)
 
                     if isinstance(action_tokenizer, LanguageActionTokenizer):
                         # Sanity Check Loss
-
                         sanity_check_loss = torch.nn.functional.cross_entropy(
                             shift_logits.reshape(-1, shift_logits.size(-1)),  # [B * T, V]
                             shift_labels.reshape(-1),                         # [B * T]
@@ -322,9 +322,6 @@ class TrainingStrategy(ABC):
                         assert torch.isclose(
                             loss, sanity_check_loss, atol=1e-1
                         ), f"Loss mismatch: {loss.item()} != {sanity_check_loss.item()}"
-                        
-                        batch_type = ["vqa" if "vqa" in name.decode() else "action" for name in batch["dataset_names"]]
-                        is_action = torch.tensor([bt == "action" for bt in batch_type], device=output.logits.device)
                         
                         # Initialize logits mask: [B, T, V]
                         mask = torch.full_like(shift_logits, -1e8)  # shape: (B, T, V)
